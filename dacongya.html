@@ -1,0 +1,127 @@
+<html>
+
+<head>
+  <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/@mdi/font@6.x/css/materialdesignicons.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.min.css" rel="stylesheet">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <title>大葱鸭杯预选赛实时积分</title>
+</head>
+
+<body>
+  <div id="app">
+    <v-app>
+      <v-main style="background-color: #dddddd;">
+        <v-container fill-height style="justify-content: center;">
+          <v-card>
+            <v-card-title>大葱鸭杯预选赛实时积分
+              <v-spacer></v-spacer>
+              <v-text-field label="搜索" v-model="search" append-icon="mdi-magnify"></v-text-field>
+            </v-card-title>
+            <v-card-subtitle>
+              更新时间：{{ time }}
+            </v-card-subtitle>
+            <v-data-table
+             :search="search" :items="scores" :headers="h" :items-per-page="100" sort-by="recent5" sort-desc>
+              <template #item.rank="{ item }">
+                {{ (item.rank == 9999) ? "-" : (item.rank + "") }}
+              </template> 
+             <template #item.history="{ item }">
+                <span>{{ item.history.slice(0, item.startIdx).join(' / ') }}</span>
+                <span v-if="item.startIdx != 0"> / </span>
+                <span style="color: #4CAF50">{{ item.history.slice(item.startIdx, item.endIdx).join(' / ') }}</span>
+                <span v-if="item.endIdx != item.history.length"> / </span>
+                <span>{{ item.history.slice(item.endIdx).join(' / ') }}</span>
+              </template>
+              <template #item.recent5="{ item }">
+                {{ item.recent5.toFixed(2) }}
+              </template>
+              <template #item.total="{ item }">
+                {{ item.total.toFixed(2) }}
+              </template>
+              <template #item.data-table-extension="{ item }">
+                {{ item.nickname }}
+              </template>
+            </v-data-table>
+          </v-card>
+        </v-container>
+      </v-main>
+    </v-app>
+  </div>
+
+  <script src="https://unpkg.com/axios/dist/axios.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vue@2.x/dist/vue.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vuetify@2.x/dist/vuetify.js"></script>
+  <script>
+    var v = new Vue({
+      el: '#app',
+      vuetify: new Vuetify(),
+      data: () => {
+        return {
+          scores: [],
+          search: "",
+          time: "",
+          h: [{value: 'rank', text:'晋级排名'}, { value: 'nickname', text: '昵称' }, { value: 'history', text: '所有战绩' }, { value: 'recent5', text: '连续5战最高累计' }, { value: 'total', text: '总分' }]
+        }
+      },
+      created: function () {
+        axios.get("https://www.diving-fish.com/api/fz_ranking/time").then(r => {
+          var ts = Math.floor(r.data.ts * 1000);
+          var d = new Date(ts);
+          zero2 = function(v) {
+            if (("" + v).length == 2) return "" + v;
+            return "0" + v;
+          }
+          this.time = `${(d.getMonth() + 1)}-${(d.getDate())} ${zero2(d.getHours())}:${zero2(d.getMinutes())}:${zero2(d.getSeconds())}`
+        })
+        axios.get("https://www.diving-fish.com/api/fz_ranking/data").then(r => {
+          for (const key in r.data) {
+            val = r.data[key].reverse()
+            // for (let i = 0; i < 10; i++) {
+            //   val.push(Math.floor(Math.random() * 60 - 30));
+            // }
+            ob = {
+              rank: 9999,
+              nickname: key,
+              history: [],
+              recent5: 0.0,
+              total: 0.0,
+              startIdx: 0,
+              endIdx: 0
+            }
+            var max = 0;
+            var startIdx = 0;
+            for (var i = 0; i < val.length; i++) {
+              var score = parseFloat(val[i]);
+              if (i - startIdx == 5) {
+                max += score;
+                max -= val[startIdx];
+                startIdx++;
+                if (max > ob.recent5) {
+                  ob.recent5 = max;
+                  ob.startIdx = startIdx;
+                  ob.endIdx = i + 1;
+                }
+              } else {
+                max += score;
+                ob.recent5 = max;
+              }
+              ob.total += score;
+              ob.history.push(score)
+            }
+            if (ob.endIdx == 0) ob.endIdx = Math.min(ob.history.length, 5);
+            this.scores.push(ob)
+          }
+          this.scores.sort((a, b) => {return b.recent5 - a.recent5});
+          let rank = 0;
+          for (let i = 0; i < this.scores.length; i++) {
+            if (this.scores[i].history.length < 5) continue;
+            this.scores[i].rank = ++rank;
+          }
+        });
+      }
+    })
+  </script>
+</body>
+
+</html>
